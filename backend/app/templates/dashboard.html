@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Smart Heating Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h2 { margin-top: 40px; }
+        .status { font-size: 18px; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Smart Heating System Dashboard</h1>
+
+    <div class="status">
+        Current Temperature: <span id="currentTemp">-</span> °C<br>
+        Room Occupancy: <span id="currentOccupancy">-</span>
+    </div>
+
+    <h2>Live Temperature (Last 10 readings)</h2>
+    <canvas id="liveTempChart" width="600" height="300"></canvas>
+
+    <h2>Historical Temperature</h2>
+    <canvas id="historicalTempChart" width="600" height="300"></canvas>
+
+    <h2>Occupancy Analysis</h2>
+    <canvas id="occupancyBarChart" width="600" height="300"></canvas>
+    <canvas id="occupancyPieChart" width="400" height="400"></canvas>
+
+    <script>
+        const liveCtx = document.getElementById('liveTempChart').getContext('2d');
+        const liveChart = new Chart(liveCtx, {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: 'Live Temp (°C)', data: [], borderColor: 'red', fill: false }] },
+            options: { responsive: true }
+        });
+
+        async function fetchLiveData() {
+            const res = await fetch('/sensors/recent');
+            const data = await res.json();
+            const labels = data.map(d => new Date(d.timestamp).toLocaleTimeString()).reverse();
+            const temps = data.map(d => d.temperature).reverse();
+            liveChart.data.labels = labels;
+            liveChart.data.datasets[0].data = temps;
+            liveChart.update();
+
+            if (data.length > 0) {
+                document.getElementById('currentTemp').textContent = data[0].temperature.toFixed(2);
+                document.getElementById('currentOccupancy').textContent = data[0].occupancy === 1 ? 'Occupied' : 'Empty';
+            }
+        }
+
+        // Historical data charts
+        async function fetchHistoricalData() {
+            const res = await fetch('/sensors/history');
+            const data = await res.json();
+
+            const timestamps = data.map(d => new Date(d.timestamp).toLocaleTimeString());
+            const temps = data.map(d => d.temperature);
+            const occupancies = data.map(d => d.occupancy);
+
+            // Line chart: historical temperature
+            const histCtx = document.getElementById('historicalTempChart').getContext('2d');
+            new Chart(histCtx, {
+                type: 'line',
+                data: { labels: timestamps, datasets: [{ label: 'Historical Temp (°C)', data: temps, borderColor: 'blue', fill: false }] }
+            });
+
+            // Bar chart: occupancy counts
+            const countOccupied = occupancies.filter(o => o===1).length;
+            const countEmpty = occupancies.filter(o => o===0).length;
+            const barCtx = document.getElementById('occupancyBarChart').getContext('2d');
+            new Chart(barCtx, {
+                type: 'bar',
+                data: { labels: ['Empty', 'Occupied'], datasets: [{ label: 'Occupancy Count', data: [countEmpty, countOccupied], backgroundColor: ['blue','green'] }] }
+            });
+
+            // Pie chart: occupancy distribution
+            const pieCtx = document.getElementById('occupancyPieChart').getContext('2d');
+            new Chart(pieCtx, {
+                type: 'pie',
+                data: { labels: ['Empty','Occupied'], datasets: [{ data: [countEmpty,countOccupied], backgroundColor: ['blue','green'] }] }
+            });
+        }
+
+        // Refresh live data every 2 seconds
+        setInterval(fetchLiveData, 2000);
+        fetchLiveData();
+        fetchHistoricalData();
+    </script>
+</body>
+</html>
